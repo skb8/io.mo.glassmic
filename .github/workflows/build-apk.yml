@@ -1,4 +1,4 @@
-name: 构建正式签名 APK
+name: Build release APK (optional signing)
 
 on:
   push:
@@ -14,8 +14,8 @@ concurrency:
 
 jobs:
   build:
-    # 同步到模块仓库后不重复构建，也不向镜像仓库提供签名材料。
-    if: github.repository == 'lm060719/io.mo.glassmic'
+    # Build in the source repository and this fork, never in the module mirror.
+    if: github.repository != 'Xposed-Modules-Repo/io.mo.glassmic'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -56,7 +56,18 @@ jobs:
           java -cp "$classpath" AudioRegression
           java -cp "$classpath" TapTimingRegression
 
-      - name: 使用正式密钥签名并验证安装包
+      - name: Prepare aligned unsigned APK
+        run: |
+          set -euo pipefail
+          version=$(python3 -c 'import json; print(json.load(open("app/build/outputs/apk/release/output-metadata.json"))["elements"][0]["versionName"])')
+          mkdir -p dist
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -P 16 -f 4 app/build/outputs/apk/release/app-release-unsigned.apk "dist/GlassMic-$version-release-unsigned.apk"
+
+      # Configure these four repository Actions secrets to enable persistent release signing.
+      # Never commit a keystore or generate an ephemeral release key on each build.
+      - name: Sign APK when signing secrets are available
+        id: signing
+        continue-on-error: true
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -64,31 +75,45 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          test -n "$ANDROID_KEYSTORE_BASE64"
-          test -n "$ANDROID_KEYSTORE_PASSWORD"
-          test -n "$ANDROID_KEY_ALIAS"
-          test -n "$ANDROID_KEY_PASSWORD"
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$ANDROID_KEYSTORE_PASSWORD" || -z "$ANDROID_KEY_ALIAS" || -z "$ANDROID_KEY_PASSWORD" ]]; then
+            echo "::warning::Signing secrets are missing or incomplete; publishing an unsigned APK."
+            exit 0
+          fi
           umask 077
-          keystore=$(mktemp "$RUNNER_TEMP/glassmic-signing-XXXXXX")
-          trap 'rm -f "$keystore"' EXIT
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          signing_dir=$(mktemp -d "$RUNNER_TEMP/glassmic-signing-XXXXXX")
+          trap 'rm -rf "$signing_dir"' EXIT
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/release.keystore"
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          unsigned_apk=$(find dist -name '*-unsigned.apk' -print -quit)
+          apk="${unsigned_apk%-unsigned.apk}.apk"
+          "$tools/apksigner" sign --ks "$signing_dir/release.keystore" --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD --v4-signing-enabled false --out "$signing_dir/signed.apk" "$unsigned_apk"
+          "$tools/apksigner" verify --verbose --print-certs "$signing_dir/signed.apk" > "$signing_dir/signature.txt"
+          "$tools/zipalign" -c -P 16 4 "$signing_dir/signed.apk"
+          cp "$signing_dir/signature.txt" dist/signature.txt
+          mv "$signing_dir/signed.apk" "$apk"
+          rm "$unsigned_apk"
+
+      - name: Record build and signing status
+        env:
+          SIGNING_OUTCOME: ${{ steps.signing.outcome }}
+        run: |
+          set -euo pipefail
+          signing=unsigned
+          if [[ -f dist/signature.txt ]]; then signing=signed; fi
+          if [[ "$SIGNING_OUTCOME" == failure ]]; then
+            echo "::warning::Signing failed; the aligned unsigned APK is available instead."
+          fi
           version=$(python3 -c 'import json; print(json.load(open("app/build/outputs/apk/release/output-metadata.json"))["elements"][0]["versionName"])')
           version_code=$(python3 -c 'import json; print(json.load(open("app/build/outputs/apk/release/output-metadata.json"))["elements"][0]["versionCode"])')
-          tools="$ANDROID_HOME/build-tools/36.0.0"
-          mkdir -p dist
-          apk="dist/GlassMic-$version-release.apk"
-          "$tools/zipalign" -P 16 -f 4 app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/glassmic-aligned.apk"
-          "$tools/apksigner" sign --ks "$keystore" --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD --v4-signing-enabled false --out "$apk" "$RUNNER_TEMP/glassmic-aligned.apk"
-          "$tools/apksigner" verify --verbose --print-certs "$apk" > dist/signature.txt
-          grep -F 'Signer #1 certificate SHA-256 digest: 20e354f32bda7574dcc747150e4f5a267a2d3bca50eb4656a3be7380cd4f96bc' dist/signature.txt
-          "$tools/zipalign" -c -P 16 4 "$apk"
-          (cd dist && sha256sum "GlassMic-$version-release.apk" > SHA256SUMS.txt)
-          printf 'versionName=%s\nversionCode=%s\ncommit=%s\nworkflow=%s/%s/actions/runs/%s\n' "$version" "$version_code" "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > dist/build-info.txt
+          (cd dist && sha256sum ./*.apk > SHA256SUMS.txt)
+          printf 'versionName=%s\nversionCode=%s\ncommit=%s\nsigning=%s\nworkflow=%s/%s/actions/runs/%s\n' "$version" "$version_code" "$GITHUB_SHA" "$signing" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" > dist/build-info.txt
+          echo "### Release APK: $signing" >> "$GITHUB_STEP_SUMMARY"
+          cat dist/build-info.txt >> "$GITHUB_STEP_SUMMARY"
 
-      - name: 上传正式安装包、签名信息与校验值
+      - name: Upload release APK and checksums
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: GlassMic-signed-release-${{ github.sha }}
+          name: GlassMic-release-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 30

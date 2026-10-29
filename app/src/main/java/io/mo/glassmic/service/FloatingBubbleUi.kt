@@ -1,6 +1,7 @@
 package io.mo.glassmic.service
 
 import android.graphics.BitmapFactory
+import io.mo.glassmic.ui.common.AudioMonitorToggle
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -288,6 +289,7 @@ fun FloatingBubbleRoot(
                         onSelect = { if (it == PanelTab.TTS) onOpenTts() else onOpenMenu() },
                         height = 36.dp
                     )
+                    AudioMonitorToggle(audioMonitorEnabled, onToggleAudioMonitor)
                     if (!compactLibrary) VolumeRow(gain = outputGain, onSetGain = onSetOutputGain)
                     if (tab == PanelTab.LIBRARY) {
                         LibraryTab(
@@ -323,8 +325,6 @@ fun FloatingBubbleRoot(
                             onPreview = onTogglePreviewTts,
                             onPlay = onPlayTts,
                             isStreaming = isStreaming,
-                            audioMonitorEnabled = audioMonitorEnabled,
-                            onToggleAudioMonitor = onToggleAudioMonitor,
                             progressBarEnabled = ttsProgressBarEnabled,
                             ttsActive = ttsActive,
                             positionMs = positionMs,
@@ -1019,8 +1019,6 @@ private fun TtsTab(
     onPreview: () -> Unit,
     onPlay: () -> Unit,
     isStreaming: Boolean,
-    audioMonitorEnabled: Boolean,
-    onToggleAudioMonitor: () -> Unit,
     progressBarEnabled: Boolean,
     ttsActive: Boolean,
     positionMs: Long,
@@ -1058,7 +1056,7 @@ private fun TtsTab(
         )
     }
 
-    // 状态行：推流指示 + 耳返监听
+    // 状态行：推流指示
     Row(verticalAlignment = Alignment.CenterVertically) {
         Dot(if (isStreaming) t.err else t.ink3, 7.dp)
         Spacer(Modifier.width(8.dp))
@@ -1087,22 +1085,6 @@ private fun TtsTab(
                     fontSize = 12.sp, fontWeight = FontWeight.Medium, color = t.ink2
                 )
             }
-            Spacer(Modifier.width(6.dp))
-        }
-        Box(
-            Modifier
-                .height(30.dp)
-                .clip(RoundedCornerShape(15.dp))
-                .background(if (audioMonitorEnabled) t.primarySoft else t.fill)
-                .clickable(onClick = onToggleAudioMonitor)
-                .padding(horizontal = 12.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                stringResource(R.string.float_audio_monitor),
-                fontSize = 12.sp, fontWeight = FontWeight.Medium,
-                color = if (audioMonitorEnabled) t.primaryInk else t.ink2
-            )
         }
     }
 

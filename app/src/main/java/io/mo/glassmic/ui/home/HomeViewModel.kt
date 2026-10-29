@@ -38,6 +38,7 @@ data class HomeUiState(
     val policyLabel: String = "循环",
     val scopeLabel: String = "全局",
     val floatingWindowVisible: Boolean = false,
+    val audioMonitorEnabled: Boolean = false,
     val isStreaming: Boolean = false,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
@@ -135,6 +136,7 @@ class HomeViewModel @Inject constructor(
                 AppLocale.string(context, R.string.scope_none_selected)
             },
             floatingWindowVisible = rt.floatingWindowVisible,
+            audioMonitorEnabled = cfg.audioMonitor.enabled,
             isStreaming = rt.isStreaming,
             positionMs = rt.positionMs,
             durationMs = rt.durationMs,
@@ -149,6 +151,15 @@ class HomeViewModel @Inject constructor(
             interceptLastPkg = stats.lastPackage
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, HomeUiState())
+
+    fun toggleAudioMonitor() {
+        viewModelScope.launch {
+            configStore.update {
+                val monitor = it.audioMonitor
+                it.setAudioMonitor(monitor.toBuilder().setEnabled(!monitor.enabled).build())
+            }
+        }
+    }
 
     fun togglePause() {
         playback.togglePause()

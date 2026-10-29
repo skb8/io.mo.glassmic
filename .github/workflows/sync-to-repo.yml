@@ -6,6 +6,7 @@ on:
 
 jobs:
   sync:
+    if: github.repository == 'lm060719/io.mo.glassmic'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source

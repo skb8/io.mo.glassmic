@@ -389,7 +389,7 @@
     <!-- Settings → Live Audio Monitor -->
     <string name="settings_section_audio_monitor">Live Audio Monitor</string>
     <string name="settings_audio_monitor_enabled">Enable Live Audio Monitor</string>
-    <string name="settings_audio_monitor_enabled_hint">Simultaneously plays replaced audio through headphones/speakers while virtual mic is streaming</string>
+    <string name="settings_audio_monitor_enabled_hint">Simultaneously plays replaced audio through phone speakers while virtual mic is streaming</string>
     <string name="settings_audio_monitor_volume">Monitor Volume</string>
     <string name="settings_output_gain">Injected volume</string>
     <string name="float_volume">Injected volume</string>
@@ -529,4 +529,5 @@
     <string name="float_tts_clear">Clear</string>
     <string name="float_show_controls">Controls</string>
     <string name="float_hide_controls">Hide</string>
+    <string name="audio_monitor_speaker">Play virtual microphone audio through phone speakers</string>
 </resources>

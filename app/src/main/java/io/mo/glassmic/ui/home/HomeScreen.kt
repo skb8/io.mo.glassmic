@@ -61,6 +61,7 @@ import io.mo.glassmic.R
 import io.mo.glassmic.data.runtime.HookActivity
 import io.mo.glassmic.proto.PlaybackPolicy
 import io.mo.glassmic.root.PolicyPhase
+import io.mo.glassmic.ui.common.AudioMonitorToggle
 import io.mo.glassmic.ui.common.AppIcon
 import io.mo.glassmic.ui.common.Dot
 import io.mo.glassmic.ui.common.GlassCard
@@ -144,6 +145,10 @@ fun HomeScreen(
 
             // ---- 主开关 ----
             MicHero(state = state, onToggle = { vm.toggleMaster(!state.running) })
+
+            GlassCard(modifier = Modifier.fillMaxWidth(), radius = 22.dp) {
+                AudioMonitorToggle(state.audioMonitorEnabled, vm::toggleAudioMonitor)
+            }
 
             // ---- 当前音源 ----
             if (state.running) {
