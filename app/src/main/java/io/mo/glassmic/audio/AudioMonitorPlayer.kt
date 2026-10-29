@@ -1,8 +1,5 @@
 package io.mo.glassmic.audio
 
-import android.content.Context
-import android.media.AudioDeviceInfo
-import dagger.hilt.android.qualifiers.ApplicationContext
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -17,12 +14,10 @@ import javax.inject.Singleton
  * 实时耳返 / 本地监听播放器。
  *
  * 当虚拟麦克风向目标应用推流时，同步把主格式（48kHz 单声道 PCM16）音频写入 AudioTrack，
- * 让用户通过手机扬声器实时听到当前替换的音源内容与进度。
+ * 让用户通过当前媒体输出（耳机或扬声器）实时听到当前替换的音源内容与进度。
  */
 @Singleton
-class AudioMonitorPlayer @Inject constructor(
-    @ApplicationContext private val context: Context
-) {
+class AudioMonitorPlayer @Inject constructor() {
 
     private var audioTrack: AudioTrack? = null
     @Volatile private var isEnabled: Boolean = false
@@ -139,13 +134,8 @@ class AudioMonitorPlayer @Inject constructor(
             }
 
             if (track.state == AudioTrack.STATE_INITIALIZED) {
-                // Route only this monitor track; leave the receiving app/call routing alone.
-                val speaker = context.getSystemService(AudioManager::class.java)
-                    ?.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-                    ?.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-                if (speaker == null || !track.setPreferredDevice(speaker)) {
-                    GlassLog.b("AudioMonitor") { "Phone speaker routing unavailable" }
-                }
+                // Keep default media routing: wired/Bluetooth headphones when connected,
+                // otherwise the phone speaker. Android handles output changes during playback.
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     track.setVolume(volume)
                 } else {
